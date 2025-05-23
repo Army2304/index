@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frutalia - Pedidos de Jugos Naturales</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configuración de Tailwind para usar la fuente Inter
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* Un verde muy claro para el fondo */
+        }
+        /* Estilos personalizados para el mensaje de éxito */
+        .success-message {
+            background-color: #d1fae5; /* Verde claro */
+            color: #065f46; /* Verde oscuro */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #34d399; /* Borde verde */
+        }
+        /* Estilos para el mensaje de error */
+        .error-message {
+            background-color: #fee2e2; /* Rojo claro */
+            color: #991b1b; /* Rojo oscuro */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #ef4444; /* Borde rojo */
+        }
+        /* Estilo para el spinner de carga */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #10B981; /* Verde esmeralda */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 0.5rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <noscript>Necesitas habilitar JavaScript para ejecutar esta aplicación.</noscript>
+    <div id="root" class="w-full max-w-4xl bg-white shadow-lg rounded-xl p-6 md:p-8 border border-green-200">
+        </div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        // Componente principal de la aplicación Frutalia
+        function App() {
+            // Estado para los campos del formulario
+            const [nombreCliente, setNombreCliente] = React.useState('');
+            const [telefono, setTelefono] = React.useState('');
+            const [saborJugo, setSaborJugo] = React.useState('naranja'); // Valor por defecto
+            const [tamano, setTamano] = React.useState('chico'); // Valor por defecto
+            const [comentariosAdicionales, setComentariosAdicionales] = React.useState('');
+
+            // Estado para el mensaje de éxito/error
+            const [mensaje, setMensaje] = React.useState(null);
+            const [tipoMensaje, setTipoMensaje] = React.useState(null); // 'success' o 'error'
+
+            // Estado para los pedidos existentes
+            const [pedidosExistentes, setPedidosExistentes] = React.useState([]);
+            const [cargandoPedidos, setCargandoPedidos] = React.useState(true);
+            const [enviando, setEnviando] = React.useState(false); // Estado para el spinner de envío
+
+            // URL de tu aplicación web de Google Apps Script
+            const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyIoG_lgFtQEbbEBXJ4i3ohCu0fFKIgEq3GAbD0BM9OCA8naqqKBqo3Sfgn1JSUUzb3/exec';
+
+            // Función para cargar los pedidos existentes desde Google Apps Script
+            const cargarPedidos = async () => {
+                if (!GOOGLE_APPS_SCRIPT_URL) {
+                    console.error("URL de Google Apps Script no configurada.");
+                    setMensaje("Error: URL de Apps Script no configurada. Por favor, edita el código.");
+                    setTipoMensaje('error');
+                    setCargandoPedidos(false);
+                    return;
+                }
+                setCargandoPedidos(true);
+                try {
+                    const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'GET',
+                        mode: 'cors' // Importante para solicitudes entre dominios
+                    });
+                    const data = await response.json();
+                    if (data.result === "error") {
+                        throw new Error(data.message);
+                    }
+                    setPedidosExistentes(data.data || []);
+                    setMensaje(null); // Limpiar mensaje de error si la carga fue exitosa
+                } catch (error) {
+                    console.error("Error al cargar pedidos:", error);
+                    setMensaje(`Error al cargar pedidos: ${error.message}. Asegúrate de que la URL de Apps Script sea correcta y el script esté desplegado.`);
+                    setTipoMensaje('error');
+                } finally {
+                    setCargandoPedidos(false);
+                }
+            };
+
+            // Cargar pedidos al montar el componente
+            React.useEffect(() => {
+                cargarPedidos();
+            }, []);
+
+            // Manejador del envío del formulario
+            const handleSubmit = async (e) => {
+                e.preventDefault(); // Previene el comportamiento por defecto del formulario
+
+                if (!GOOGLE_APPS_SCRIPT_URL) {
+                    setMensaje("Error: URL de Google Apps Script no configurada. Por favor, edita el código.");
+                    setTipoMensaje('error');
+                    return;
+                }
+
+                setEnviando(true); // Activa el spinner
+                setMensaje(null); // Limpia mensajes anteriores
+
+                const formData = {
+                    nombreCliente,
+                    telefono,
+                    saborJugo,
+                    tamano,
+                    comentariosAdicionales
+                };
+
+                try {
+                    // Envía los datos a la URL de Google Apps Script
+                    const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'cors', // Necesario para solicitudes entre dominios
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.result === "success") {
+                        setMensaje("Tu pedido ha sido enviado con éxito, pasa a recogerlo en 10 minutos, ¡Frutalia agradece tu preferencia!");
+                        setTipoMensaje('success');
+                        // Limpiar el formulario después del envío exitoso
+                        setNombreCliente('');
+                        setTelefono('');
+                        setSaborJugo('naranja');
+                        setTamano('chico');
+                        setComentariosAdicionales('');
+                        // Recargar los pedidos para mostrar el nuevo
+                        cargarPedidos();
+                    } else {
+                        throw new Error(result.message || "Error desconocido al enviar el pedido.");
+                    }
+                } catch (error) {
+                    console.error("Error al enviar el pedido:", error);
+                    setMensaje(`Error al enviar el pedido: ${error.message}. Por favor, inténtalo de nuevo.`);
+                    setTipoMensaje('error');
+                } finally {
+                    setEnviando(false); // Desactiva el spinner
+                }
+            };
+
+            return (
+                <div className="space-y-8">
+                    <header className="text-center">
+                        <h1 className="text-4xl md:text-5xl font-bold text-green-700 mb-2">Frutalia 🥭</h1>
+                        <p className="text-xl text-green-600">¡Tus jugos naturales frescos, listos en 10 minutos!</p>
+                    </header>
+
+                    <section className="bg-green-50 p-6 rounded-lg shadow-md border border-green-200">
+                        <h2 className="text-2xl font-semibold text-green-800 mb-4">Realiza tu Pedido</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label htmlFor="nombreCliente" className="block text-sm font-medium text-gray-700 mb-1">Nombre del cliente</label>
+                                <input
+                                    type="text"
+                                    id="nombreCliente"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    value={nombreCliente}
+                                    onChange={(e) => setNombreCliente(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                                <input
+                                    type="tel"
+                                    id="telefono"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    value={telefono}
+                                    onChange={(e) => setTelefono(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="saborJugo" className="block text-sm font-medium text-gray-700 mb-1">Sabor del jugo</label>
+                                <select
+                                    id="saborJugo"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    value={saborJugo}
+                                    onChange={(e) => setSaborJugo(e.target.value)}
+                                    required
+                                >
+                                    <option value="naranja">Naranja</option>
+                                    <option value="mango">Mango</option>
+                                    <option value="fresa">Fresa</option>
+                                    <option value="piña">Piña</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="tamano" className="block text-sm font-medium text-gray-700 mb-1">Tamaño</label>
+                                <select
+                                    id="tamano"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    value={tamano}
+                                    onChange={(e) => setTamano(e.target.value)}
+                                    required
+                                >
+                                    <option value="chico">Chico</option>
+                                    <option value="mediano">Mediano</option>
+                                    <option value="grande">Grande</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="comentariosAdicionales" className="block text-sm font-medium text-gray-700 mb-1">Comentarios adicionales</label>
+                                <textarea
+                                    id="comentariosAdicionales"
+                                    rows="3"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    value={comentariosAdicionales}
+                                    onChange={(e) => setComentariosAdicionales(e.target.value)}
+                                ></textarea>
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="w-full flex justify-center items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out"
+                                disabled={enviando}
+                            >
+                                {enviando ? (
+                                    <>
+                                        Enviando pedido
+                                        <span className="spinner"></span>
+                                    </>
+                                ) : (
+                                    "Enviar Pedido"
+                                )}
+                            </button>
+                        </form>
+
+                        {/* Mensaje de éxito o error */}
+                        {mensaje && (
+                            <div className={`${tipoMensaje === 'success' ? 'success-message' : 'error-message'}`}>
+                                {mensaje}
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="bg-blue-50 p-6 rounded-lg shadow-md border border-blue-200">
+                        <h2 className="text-2xl font-semibold text-blue-800 mb-4 flex items-center justify-between">
+                            Pedidos Guardados
+                            <button
+                                onClick={cargarPedidos}
+                                className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out"
+                                disabled={cargandoPedidos}
+                            >
+                                {cargandoPedidos ? (
+                                    <>
+                                        Cargando
+                                        <span className="spinner"></span>
+                                    </>
+                                ) : (
+                                    "Actualizar"
+                                )}
+                            </button>
+                        </h2>
+                        {cargandoPedidos ? (
+                            <p className="text-center text-gray-600 flex items-center justify-center">
+                                Cargando pedidos... <span className="spinner"></span>
+                            </p>
+                        ) : pedidosExistentes.length === 0 ? (
+                            <p className="text-center text-gray-600">No hay pedidos registrados aún.</p>
+                        ) : (
+                            <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            {/* Asegúrate de que los encabezados coincidan con los de Google Apps Script */}
+                                            {Object.keys(pedidosExistentes[0]).map((key) => (
+                                                <th key={key} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    {key}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {pedidosExistentes.map((pedido, index) => (
+                                            <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                {Object.values(pedido).map((value, idx) => (
+                                                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {value}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </section>
+                </div>
+            );
+        }
+
+        // Renderiza la aplicación React en el elemento con id 'root'
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
